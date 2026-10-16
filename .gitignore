@@ -1,0 +1,10 @@
+# agent jar + bytecode
+rw.jar
+build/
+# decompilation artifacts (regenerate from game-local only)
+decomp/
+# local memory, never commit
+memory.md
+# OS
+.DS_Store
+Thumbs.db

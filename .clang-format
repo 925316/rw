@@ -1,0 +1,11 @@
+Language: Java
+BasedOnStyle: Google
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+BreakBeforeBraces: Attach
+ColumnLimit: 0
+SortIncludes: Never
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortBlocksOnASingleLine: Empty
