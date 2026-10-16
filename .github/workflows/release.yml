@@ -1,0 +1,52 @@
+# Every push to master rebuilds rw.jar and overwrites the rolling "latest" release,
+# so the Releases page always hosts the newest build under a permanent download link.
+
+name: release
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build
+        run: |
+          mkdir -p build/classes
+          # target 8 so the classes load in any JVM from Java 8 up
+          javac --release 8 -d build/classes src/rw.java
+          printf '%s\n' "${GITHUB_SHA}" > build/classes/build-stamp.txt
+          jar cfm build/rw.jar MANIFEST.MF -C build/classes .
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp build/rw.jar rw.bat dist/
+          (cd dist && zip -r ../rw.zip .)
+
+      - name: Publish latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest ./rw.zip \
+            --target "${GITHUB_SHA}" \
+            --latest \
+            --title latest \
+            --notes "Built from ${GITHUB_SHA:0:7}. Source and license: https://github.com/${GITHUB_REPOSITORY}"
