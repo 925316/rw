@@ -13,9 +13,9 @@ exactly what `rw.bat` does for you: it uses `jvm64` when it exists, so the game 
 up running is the 64-bit one. Starting the 64-bit launcher yourself lets `rw.bat` attach
 without a restart.
 
+
 Requirements: the JVMs shipped with the game. A `JAVA_HOME` or `PATH` JVM is only used to
-run the injector when the game folder has no `jvm64`. Set `GAME_DIR` to the game folder to
-keep both files somewhere else.
+run the injector when the game folder has no `jvm64`.
 
 ## Build
 

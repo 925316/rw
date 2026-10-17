@@ -784,12 +784,14 @@ public class rw {
      * Attaches this agent to a running game JVM, or with --launch &lt;game folder&gt; starts the
      * game from that folder with the agent on its command line.
      *
-     * <p>Run as: java -cp rw.jar rw [--wait [seconds]] | rw --launch &lt;game folder&gt;
+     * <p>Run as: java -cp rw.jar rw [--wait [seconds]] [game folder] | rw --launch &lt;game folder&gt;
      *
      * <p>A single attempt is made unless --wait is given, which polls once a second until the
-     * game shows up; --wait N gives up after N seconds. Attaching needs no game folder, the
-     * game is found through the attach API, which is reached by reflection so that this side
-     * of the class adds no linkage requirement to the agent.
+     * game shows up; --wait N gives up after N seconds. A game that cannot be attached (the
+     * 32-bit build) is closed and started again with the agent, but only when a folder to
+     * start it from is known. Attaching needs no game folder: the game is found through the
+     * attach API, which is reached by reflection so that this side of the class adds no
+     * linkage requirement to the agent.
      */
     public static void main(String[] args) {
         if (args.length > 0 && args[0].equals("--launch")) {
@@ -798,11 +800,15 @@ public class rw {
         }
         boolean wait = false;
         int waitSeconds = 0;
+        String gameArg = null;
         for (int i = 0; i < args.length; i++) {
-            if (!args[i].equals("--wait")) continue;
-            wait = true;
-            if (i + 1 < args.length && args[i + 1].matches("\\d+")) {
-                waitSeconds = Integer.parseInt(args[++i]);
+            if (args[i].equals("--wait")) {
+                wait = true;
+                if (i + 1 < args.length && args[i + 1].matches("\\d+")) {
+                    waitSeconds = Integer.parseInt(args[++i]);
+                }
+            } else if (!args[i].startsWith("--") && !args[i].isEmpty()) {
+                gameArg = args[i];
             }
         }
         try {
@@ -811,17 +817,26 @@ public class rw {
                 System.out.println("[rw] cannot locate rw.jar, run: java -cp rw.jar rw");
                 System.exit(2);
             }
+            String gameDir = gameDirOf(gameArg);
             long deadline = waitSeconds > 0 ? System.currentTimeMillis() + waitSeconds * 1000L : Long.MAX_VALUE;
             int ticks = 0;
             while (true) {
                 int injected = tryInject(jar);
                 if (injected > 0) {
+                    clearLine();
                     System.out.println();
                     System.exit(0);
                 }
                 if (!blockedPids.isEmpty()) {
+                    // Never close a game that cannot be started again.
+                    if (!canLaunch(gameDir, jar)) {
+                        clearLine();
+                        System.out.println("[rw] the running game cannot be attached (32-bit build)");
+                        System.out.println("[rw] and rw could not find its folder to restart it");
+                        System.exit(3);
+                    }
                     closeBlocked();
-                    System.exit(3);
+                    launchGame(gameDir);
                 }
                 if (!wait) {
                     System.out.println("[rw] the game is not running");
@@ -846,16 +861,32 @@ public class rw {
                 }
             }
         } catch (Throwable t) {
+            clearLine();
             System.out.println("[rw] error: " + rootCause(t));
             System.exit(2);
         }
     }
 
+    /** Null unless the folder holds a bundled JVM. */
+    static String gameDirOf(String path) {
+        if (path == null || path.isEmpty()) return null;
+        File d = new File(path);
+        if (new File(d, "jvm64/bin/java.exe").isFile() || new File(d, "jvm/bin/java.exe").isFile()) {
+            return d.getAbsolutePath();
+        }
+        return null;
+    }
+
+    static boolean canLaunch(String gameDir, File jar) {
+        return jar != null && gameDirOf(gameDir) != null;
+    }
+
     /** Starts the game with this agent on its command line; blocks until it exits. */
     static void launchGame(String gameDir) {
+        clearLine();
         File dir = gameDir == null ? null : new File(gameDir);
         if (dir == null || !dir.isDirectory()) {
-            System.out.println("[rw] cannot find the game folder, set GAME_DIR to it and run this again");
+            System.out.println("[rw] cannot find the game folder: " + gameDir);
             System.exit(2);
         }
         File jvm = new File(dir, "jvm64/bin/java.exe");
